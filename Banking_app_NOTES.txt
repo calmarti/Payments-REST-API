@@ -414,6 +414,31 @@ a) Catch: Does the code have a try-catch block to handle the specific error?
 If neither is present, the program will not compile. 
 
 
+**DIGRESSION ABOUT GIT PULLING FROM A REMOTE REPO WITH DIVERGENT
+COMMIT HISTORY (RELATIVE TO YOUR LOCAL REPO)**
+-You made local commits first
+-GitHub repo already had its own commits (the README)
+-So histories diverged:
+same branch name (master), different commit histories
+=> Git can’t guess how you want to combine them anymore, so it stops and asks.
+-What the options mean:
+merge (pull.rebase false)
+→ keeps both histories, creates a merge commit
+rebase (pull.rebase true)
+→ replays your commits on top of GitHub’s README commits (cleaner)
+ff-only (pull.ff only)
+→ refuses unless history is linear (not your case)
+What you should do here (recommended)
+-If the remote only has a README:
+git pull --rebase origin master
+That will:
+-keep the README commits
+-put your local work after them
+-avoid an unnecessary merge commit
+
+
+
+
 ----
 
 
