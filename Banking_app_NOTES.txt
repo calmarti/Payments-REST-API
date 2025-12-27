@@ -1,0 +1,421 @@
+*Install MySql Server 
+sudo apt install mysql-server
+
+*Run 'sudo mysql_secure_installation' 
+to prevent remote log in among other security measures
+Then:
+1) sudo mysql 
+2) Create a new user so I don't need to use root:
+CREATE USER 'calmarti'@'localhost' IDENTIFIED BY '12345678';
+GRANT ALL PRIVILEGES ON *.* TO 'calmarti'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EXIT;
+
+*Log in to mysql server (using mysql shell which is its cli client) as calmarti to verify it worked:
+mysql -u calmarti -p => will prompt for the password I set
+
+*Install MySql WorkBench
+(it's already installed as a snap in Ubuntu 22.04)
+
+*MySql Workbench comes preinstalled as a snap in Ubuntu 22.04 so i did not have to install it
+
+*Then I create a connection in Workbench by clicking on "+" and then: 
+connection name: calmarti
+host: 127.0.0.1
+port: 3306
+password: 12345678
+***NOTE:
+*That saved connection is a connection to the MySQL server instance as a whole, not to a single database.
+*It stores: host, port, user, and password that Workbench will use to log into that MySQL server. The same connection can see and access many databases (schemas) on that server, as long as that user has privileges.
+
+*Now from query editor:
+create database banking_app;
+
+*Go to schema tab (left panel) and right-click your way to "refresh"
+option so the new db appears
+
+*In my Spring project's application.properties file:
+spring.application.name=banking-app
+spring.datasource.url=jdbc:mysql://localhost:3306/banking_app
+spring.datasource.username=calmarti
+spring.datasource.password=12345678
+spring.jpa.hibernate.ddl-auto=update 
+
+*Then we add:
+spring.jpa.hibernate.ddl-auto=update
+
+With this property set to "update", Hibernate will:
+-Create missing tables
+-Add missing columns
+-Not delete existing data
+Very convenient for:
+-Local development
+-Early prototyping
+But:
+-It can produce unexpected schema changes
+-It’s not recommended for production
+=> For production setups spring.jpa.hibernate.ddl-auto=validate
+
+*Do NOT set the SQL dialect of hibernate:
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+//This is not required (but not deprecated) in modern Spring Boot as Hibernate autodetects the dialect. Setting this could be potentially harmful!!
+
+*Start the Spring app to see if it is actually connecting to db by checking that logs like these appear:
+HikariDataSource - Start completed.
+HikariPool-1 - Added connection ...
+
+*Set this property to see the sql executed queries in the Spring logs: spring.jpa.show-sql=true
+
+*From net.calmarti.banking_app package create this 4 packages: controller, entity, repository and service
+
+*To entity classes add these lombok annotations to avoid writing boilerplate code:
+-It crates getters, setters, equals, toString and hashCode methods
+-It also creates an args constructor for final fields and @NonNull annotated fields
+It is almost equivalent to:
+@Getter
+@Setter
+@ToString
+@EqualsAndHashCode
+@RequiredArgsConstructor
+
+***WARNING: @Data is Not always recommended for JPA entities
+Using @Data on JPA entities can cause issues:
+equals() / hashCode() using all fields
+Problems with:
+lazy-loaded relationships
+Hibernate proxies
+bidirectional relationships (infinite loops)
+Note: For DTOs using @Data coupled with @AllArgsConstructor is totally fine
+
+*Meaning of this annotation of id field of an entity:
+@GeneratedValue(strategy = GenerationType.IDENTITY)
+
+=> The database itself will generate the primary key value at INSERT time, and Hibernate must read it back after the row is inserted.
+Takeways:
+-Database is in control
+-MySQL: AUTO_INCREMENT
+-PostgreSQL: SERIAL / IDENTITY
+-Hibernate does not calculate IDs.
+
+Better approach for entities:
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+
+*Out-of-context reminder: In Spring services should be singleton.
+-This means a single service (instance of the class) for the entire
+application (for all requests, users, threads)
+-This means exactly one object in memory
+
+
+*What happens when "save" is called:
+a) account savedAccount = accountRepository.save(account);
+-This is Spring Data JPA. Under the hood it uses the JPA EntityManager.
+-What save() does conceptually:
+-It decides between:
+   -persist (new entity)
+   -merge (existing/detached entity)
+-The decision is typically based on whether the entity is considered “new”:
+   -often id == null => new =>persist
+   -id != null => might use merge
+(Exact behavior can vary depending on your entity and Spring Data configuration, but that’s the usual rule)
+
+b) What happens in the DB and when
+This is subtle but important:
+-Calling save() does not always immediately run an INSERT
+With JPA/Hibernate, the INSERT often happens on:
+-flush
+-which usually occurs at transaction commit
+-or earlier if Hibernate needs it (or if you call flush())
+-So the timeline is often:
+1. save() registers the entity to be inserted
+2. INSERT happens at flush/commit
+3. DB generates an ID (if auto-generated)
+4. Hibernate updates the entity’s id
+=> If your service method is transactional (common), commit happens after the method returns.
+
+c) The big question: how does the returned entity differ from the one you passed?
+Case A: persist path (new entity)
+-If save() ends up doing persist(account):
+    -Usually the returned entity is the same Java object reference you passed in
+    -The main difference is that now it’s managed by Hibernate
+    -And after flush/commit, it will have an assigned ID
+So:
+
+before save: account.id == null
+after save/flush: account.id == 1
+
+Case B: merge path (detached/existing entity)
+If save() uses merge(account):
+-JPA returns a managed copy
+-The object you passed in may remain detached
+-The returned object can be a different instance
+
+With Strategy IDENTITY and id (from request payload) == null 
+-Hibernate must execute the SQL INSERT immediately
+-It cannot batch or delay it until commit
+-It needs the generated ID right away
+So the flow is:
+save(account)
+│
+├── INSERT INTO ACCOUNT (...)
+│
+├── DB generates ID
+│
+└── Hibernate sets account.id = <generated value>
+
+*Does this service method (that internally uses the repository 
+to call "save") “work” without @Transactional?
+-Usually yes, because:
+-Spring Data JPA’s save() will start a transaction internally if none exists
+-The INSERT will be executed
+-The data will be persisted
+-So you won’t necessarily see errors.
+But…
+This is still a problem (conceptually and practically)
+=> You don’t control the transaction boundary
+Right now:
+-The transaction scope is implicit
+-Managed by repository internals
+-Not visible in your business logic
+Best practice in Spring is:
+-Transactions belong to the service layer, not the repository layer.
+-Your service method is the business operation: “Create an account”
+-That operation should be atomic.
+-The way it is the service method is already a transactional unit but ...
+The moment you add: 
+-another repository call
+-validation that touches the DB
+-an audit log insert
+-a balance update elsewhere
+You’ll want all of it to succeed or fail together.
+-Without @Transactional, you risk partial work.
+-Also: adding @Transactional makes the lifecycle explicit and predictable.
+
+*One rule of thumb about annotations:
+If you are in a Spring application, always use Spring annotations when they exist.
+Ex: @Transactional 
+
+*About "Optional" class: BIG clarification (
+=> Optional is NOT about method arguments
+=> Optional is about return values
+
+*On wether to use the "save" repo method in a non-post 
+service method like deposit(Long id, double amount)
+(where you first need to get the account)
+-If you are annotating it with @Transactional → Hibernate watches → auto update
+(no need to add accountRepository.save(account)
+-If you are NOT using @Transactional → nobody watches → you must save()
+
+
+*On CORS and why it may block PUT requests (and how to fix it in Spring Boot):
+-CORS stands for Cross-Origin Resource Sharing. It is a browser-based security mechanism that allows or restricts web pages from making requests to a domain different from the one that served the web page.
+-Origin Definition: An origin is defined by the combination of the protocol (e.g., HTTPS), domain (e.g., example.com), and port (e.g., 443). If any of these differ between the requesting site and the target server, it is a cross-origin request.
+
+*Who is responsible for “disabling” / configuring CORS?
+=> The BACKEND. Always. Frontend cannot bypass CORS
+
+AS A RULE OF THUMB WHEN IT COMES TO CORS:
+*PUT is NON-SIMPLE request 
+-In general: so-called state-changing methods (PUT/DELETE/PATCH) are considered
+non-simple
+PUT → Replace or update the state of an existing resource
+PATCH → Partially modify the state of an existing resource
+DELETE → Remove the resource (state becomes “gone”)
+
+-Simple request: GET , POST, HEAD (some of them: the simple ones, for an accurate
+definition of "simple request" scroll down)
+-Browsers only send "simple requests" directly 
+Since PUT is not simple the browser sends a preflight first:
+-Browser sends OPTIONS (preflight): “Hey server, do you allow PUT from this origin with these headers?”
+-If your backend doesn’t allow it (or Spring Security blocks OPTIONS), you get OPTIONS 403, and then the real PUT never happens.
+NOTE: POST can also change state (create resources). The reason PUT feels “more dangerous” in practice is: it’s guaranteed to be non-simple and therefore hits the preflight/CORS/security checks more often, not because POST is harmless.
+
+*MORE ACCURACY ON "SIMPLE REQUEST" DEFINITON by GPT:
+A request is simple only if ALL are true:
+-Method is GET / POST / HEAD
+-Content-Type is NOT application/json
+-No custom headers
+
+
+*Non negative validation:
+-It should go in the service layer: The service owns the business rules, and “you cannot deposit a negative amount” is a business rule.
+-Controllers deal with HTTP, not domain correctness.
+
+
+***OVERLOOOKED IN TUTORIAL: 
+How to code the exception handling in each controller handler
+In particular, how would errors from service layer be mapped or interact with the exception handling in the controller layer
+
+***Withdrawal handler / service method not tested yet!!!
+***HOW TO HANDLE SERVICE EXCEPTIONS IN CONTROLLER HANDLERS
+
+min 51...DELETE handler
+
+ON RECORDS AS IDEAL DTOS (better than Lombok @Data annotation)
+Records are ideal DTOs because:
+-Thread-safe by default
+-No accidental mutation
+Also: records are a native Java feature (unlike Lombok)
+
+Use records for:
+-API payloads
+-Request/response models 
+-Events and messages
+
+
+Use Lombok @Data for:
+-JPA entities
+-Mutable domain models
+-Legacy codebases
+-Cases where setters are required
+
+
+*Rule of thumb
+If the object represents data you read or transfer, use a record.
+If the object represents state you modify, use Lombok's @Data (or explicit code).
+
+
+ABOUT ALLOWING THE POSSIBILITY OF THE USER SENDINT ITS OWN ID
+This mapper method allows for that possiblity when mapping from
+DTO to the entity:
+    public static Account mapToAccount(AccountDto accountDto){
+        Account account = new Account(accountDto.id(),
+                accountDto.accountHolderName(),
+                accountDto.balance());
+        return account;
+    }
+
+Key rule in JPA
+-In JPA, a non-null id means “this entity already exists”.
+-Hibernate does not ask:
+“Did this come from a POST?”
+“Is this a new account?”
+-It only checks:
+id == null ? INSERT : UPDATE / MERGE
+
+For POST handlers it doesn't matter if the user sends a non-null id
+since it will always ignore it
+This is only because of the IDENTITY = Srategy of Id generation.
+For example
+POST /accounts
+→ new Account(id = 999)
+→ repository.save(account)
+→ IDENTITY strategy
+→ INSERT
+
+But for PUT/PATH (update requests) if user sends a non-null id IN THE REQUEST BODY then  it will inmediately assume it should perform an UPDATE/MERGE and it can overwrite an existing account and change all its related fields for that record
+
+A fix for this is to  change the mapToAccount method so the mapped account has always "null" id (regardless of the method verb):
+    public static Account mapToAccount(AccountDto accountDto){
+        Account account = new Account(null,...
+        
+Another solution is what experienced backend devs always insist on:
+-Request vs Response DTOs
+
+***IMPORTANT One-sentence takeaway
+-Allowing id in request DTOs turns “save” into “update whatever the user wants”.
+
+
+
+EXCEPTION HANDLING IN SPRING BOOT
+1:04:45
+-It's done using @ControllerAdvice and @ExceptionHandler annotations
+GPT: @ControllerAdvice + @ExceptionHandler is the standard way to do it in spring boot
+-create a serparate exception package 
+-create a custom exception class like AccountExpection and make it 
+extends RunTimeException
+
+*GPT: What @ControllerAdvice does:
+“A global interceptor for exceptions thrown by controllers.”
+-Spring does this internally:
+1.A controller method is executed
+2.An exception is thrown anywhere in the call chain (controller → service → repository)
+3.Spring looks for a matching @ExceptionHandler
+4.If found, it uses it to build the HTTP response
+
+*GPT: ErrorDetails as a record is also common practice
+This:
+
+public record ErrorDetails(
+                           LocalDateTime localDateTime,
+                           Integer status,
+                           String error,
+                           String message,
+                           String path,
+                           String errorCode ) {
+}
+
+
+...follows a standard REST error response pattern:
+
+{
+  "timestamp": "2025-01-01T12:00:00",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Account not found",
+  "path": "/accounts/42",
+  "errorCode": "ACCOUNT_NOT_FOUND"
+}
+
+
+***IMPORTANT:
+Do not confuse errorCode field in ErrorDetails with Http Status code
+HTTP status code ≠ error code
+=> errorCode is usually application-level, not HTTP-level
+
+*errorCode is meant to answer:
+“What went wrong in business terms?”
+
+-Why this matters
+Among many other reasons, because Frontend can react differently to the same HTTP status
+Example of frontend logic:
+if (error.errorCode === "ACCOUNT_NOT_FOUND") {
+  showCreateAccountCTA();
+}
+=> This is impossible with just numeric HTTP codes!
+
+*Numeric error codes (less common in REST APIs)
+Used when:
+Legacy systems
+Banking / telco / enterprise protocols
+Strict API contracts
+=> String error codes are today's standard
+
+
+-is AccountException a good naming convention for just this particular error?
+isn't it too general?
+-Libro/GPT: review "super()" and in the specific context of AccountException
+-research @ControllerAdvice annotation (GPT and Spring Academy Notes from Advice lesson)
+
+**A topic for further study: checked vs unchecked exceptions in Java
+*A Brief Primer on Checked exception (Google AI Mode):
+
+-The "checked" part refers to the compiler's enforcement of a contract. 
+
+-In Java, a checked exception is as much a part of a method's signature as its return type and parameters. By declaring a checked exception (e.g., public void readFile() throws IOException), you are officially informing any developer who uses your method: "This operation might fail due to factors outside my control, and you must decide how to deal with it". 
+
+-It Signifies "Recoverable" Failures:
+The primary purpose of making an exception "checked" is to flag situations where the program could potentially recover if the error is handled
+
+-Checked exceptions almost always represent problems with resources outside the JVM's direct control. This includes: 
+
+    File systems: (e.g., IOException)
+    Databases: (e.g., SQLException)
+    Networks: (e.g., ConnectException)
+    Since the programmer cannot guarantee these external systems will always work perfectly, the compiler "checks" to ensure you haven't forgotten to account for their failure. 
+
+-What "Checked" Means to the Compiler
+When the compiler "checks" an exception, it verifies two things:
+a) Catch: Does the code have a try-catch block to handle the specific error?
+2) Specify: If not caught, is the error listed in the method’s throws clause to warn the next caller? 
+
+If neither is present, the program will not compile. 
+
+
+----
+
+
+QA & Friends - capítulo 3 (Fede Toledo) min 30.
+
