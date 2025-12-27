@@ -1,5 +1,5 @@
-# Payments-RESTFul-API-
-A very simple API for banking payments 
+# Payments-REST-API
+A very simple RESTFul API for banking payments 
 
 - GET /api/accounts/
 - GET /api/accounts/id
