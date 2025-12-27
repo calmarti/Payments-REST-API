@@ -1,0 +1,28 @@
+# ===== Build output =====
+/target/
+build/
+
+# ===== IDE files =====
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+
+# ===== Environment / secrets =====
+.env
+application-*.yml
+application.properties
+
+
+# ===== OS files =====
+
+
+# ===== Logs =====
+
+
+# ===== Database =====
+
+
+# ===== Misc =====
