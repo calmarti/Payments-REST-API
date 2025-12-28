@@ -1,5 +1,6 @@
 package net.calmarti.banking_app.controller;
 
+import jakarta.validation.Valid;
 import net.calmarti.banking_app.dto.AccountDto;
 import net.calmarti.banking_app.dto.UpdateBalanceDto;
 import net.calmarti.banking_app.service.AccountService;
@@ -31,14 +32,14 @@ public class AccountController {
         return new ResponseEntity<>(account,HttpStatus.OK);
     }
 
-    @CrossOrigin
+
     @PostMapping
-    public ResponseEntity<AccountDto> createAccount(@RequestBody AccountDto accountDto){
+    public ResponseEntity<AccountDto> createAccount(@RequestBody @Valid AccountDto accountDto){
         AccountDto createdAccount = accountService.openNewAccount(accountDto);
         return new ResponseEntity<>(createdAccount,HttpStatus.CREATED);
     }
 
-    @CrossOrigin
+
     @PatchMapping("/{id}/deposit")
     public ResponseEntity<AccountDto> depositToAccountById(@PathVariable Long id, @RequestBody UpdateBalanceDto request) {
         AccountDto account = accountService.deposit(id, request.amount());
@@ -46,7 +47,7 @@ public class AccountController {
         //return ResponseEntity.ok(account); //this would also work
     }
 
-    @CrossOrigin
+
     @PatchMapping("/{id}/withdraw")
     public ResponseEntity<AccountDto> withdrawFromAccountById(@PathVariable Long id, @RequestBody UpdateBalanceDto request) {
         AccountDto account = accountService.withdraw(id, request.amount());
@@ -54,7 +55,7 @@ public class AccountController {
         //return ResponseEntity.ok(account); //this would also work
     }
 
-   @CrossOrigin
+
    @DeleteMapping("/{id}")
    public ResponseEntity<Void> deleteAccountById(@PathVariable Long id){
         accountService.delete(id);

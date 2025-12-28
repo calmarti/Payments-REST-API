@@ -383,11 +383,7 @@ Banking / telco / enterprise protocols
 Strict API contracts
 => String error codes are today's standard
 
-
--is AccountException a good naming convention for just this particular error?
-isn't it too general?
--Libro/GPT: review "super()" and in the specific context of AccountException
--research @ControllerAdvice annotation (GPT and Spring Academy Notes from Advice lesson)
+***IMPORTANT: the generic exception in a GlobalExceptionHandler class must be placed at the end of the class. Otherwise it would swallow all the other exceptions and everything becomes a 500!
 
 **A topic for further study: checked vs unchecked exceptions in Java
 *A Brief Primer on Checked exception (Google AI Mode):
@@ -435,9 +431,6 @@ That will:
 -keep the README commits
 -put your local work after them
 -avoid an unnecessary merge commit
-
-
-
 
 ----
 

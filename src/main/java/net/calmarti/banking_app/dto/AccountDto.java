@@ -11,4 +11,14 @@ package net.calmarti.banking_app.dto;
 //    private Double balance;
 //}
 
-public record AccountDto(Long id, String accountHolderName, Double balance){};
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
+
+@JsonIgnoreProperties(ignoreUnknown = false)
+public record AccountDto(
+        Long id,
+        @NotBlank(message = "Account holder name is required")
+        String accountHolderName,
+        @PositiveOrZero(message = "Balance must be zero or positive")
+        Double balance){};

@@ -6,4 +6,7 @@ package net.calmarti.banking_app.dto;
 //    private Double amount;
 //}
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = false)
 public record UpdateBalanceDto(Double amount){}
