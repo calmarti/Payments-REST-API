@@ -4,6 +4,8 @@ package net.calmarti.banking_app.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 
 @Entity
 @Table(name="ACCOUNT")
@@ -19,6 +21,6 @@ public class Account {
     @Column(name="account_holder_name")
     private String accountHolderName;
     @Column(name="balance")
-    private Double balance;
+    private BigDecimal balance;
 
 }

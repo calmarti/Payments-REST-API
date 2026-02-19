@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -25,7 +26,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
-    public List<AccountDto> obtainAllAccounts() {
+    public List<AccountDto> findAllAccounts() {
         return accountRepository.findAll()
                 .stream()
                 .map((account -> AccountMapper.mapToAccountDto(account)))
@@ -33,7 +34,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
-    public AccountDto obtainAccountDetails(Long id) {
+    public AccountDto findAccountById(Long id) {
         if (id == null) throw new IllegalArgumentException("Account id must not be null");
 
         Account account = accountRepository.findById(id)
@@ -43,7 +44,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
-    public AccountDto openNewAccount(AccountDto accountDto) {
+    public AccountDto createAccount(AccountDto accountDto) {
         Account account = AccountMapper.mapToAccount(accountDto);
         Account savedAccount = accountRepository.save(account);
         return AccountMapper.mapToAccountDto(savedAccount);
@@ -52,15 +53,15 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountDto deposit(Long id, double amount) {
+    public AccountDto deposit(Long id, BigDecimal amount) {
         if (id == null) throw new IllegalArgumentException("Account id must not be null");
-        if (amount < 0) throw new IllegalArgumentException("Amount must be non-negative");
+        if (amount.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("Amount must be non-negative");
 
-        //TODO: validate amount must be non-negative double
+        //TODO: validate amount must be non-negative
         Account account = accountRepository.findById(id)
                 .orElseThrow(()-> new AccountException("Account with id " + id + " does not exist"));
                                   //new NoSuchElementException("Account with id " + id + " does not exist"));
-        account.setBalance(account.getBalance() + amount);
+        account.setBalance(account.getBalance().add(amount));
         Account savedAccount = accountRepository.save(account); //We call "save" for educational purposes but with @Transactional this is not required
         return AccountMapper.mapToAccountDto(savedAccount);
     }
@@ -68,17 +69,17 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountDto withdraw(Long id, double amount) {
+    public AccountDto withdraw(Long id, BigDecimal amount) {
         if (id == null) throw new IllegalArgumentException("Account id must not be null");
-        if (amount < 0) throw new IllegalArgumentException("Amount must be non-negative");
+        if (amount.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("Amount must be non-negative");
 
         Account account = accountRepository.findById(id)
                 .orElseThrow(()->  new AccountException("Account with id " + id + " does not exist"));
                                    //new NoSuchElementException("Account with id = " + id + " does not exist"));
 
-        if (account.getBalance() < amount) throw new IllegalArgumentException("Withdrawal amount must not be greater than current balance");
+        if (account.getBalance().compareTo(amount) < 0) throw new IllegalArgumentException("Withdrawal amount must not be greater than current balance");
 
-        account.setBalance(account.getBalance() - amount);
+        account.setBalance(account.getBalance().subtract(amount));
         //With @Transactional, we don't really need to call "save"
         return AccountMapper.mapToAccountDto(account);
     }

@@ -3,6 +3,7 @@ package net.calmarti.banking_app.controller;
 import jakarta.validation.Valid;
 import net.calmarti.banking_app.dto.AccountDto;
 import net.calmarti.banking_app.dto.UpdateBalanceDto;
+import net.calmarti.banking_app.dto.UpdateBalanceType;
 import net.calmarti.banking_app.service.AccountService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,37 +24,43 @@ public class AccountController {
 
     @GetMapping
     public ResponseEntity<List<AccountDto>> getAllAccounts(){
-        return ResponseEntity.ok(accountService.obtainAllAccounts());
+        return ResponseEntity.ok(accountService.findAllAccounts());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<AccountDto> getAccountById(@PathVariable Long id){
-        AccountDto account = accountService.obtainAccountDetails(id);
+        AccountDto account = accountService.findAccountById(id);
         return new ResponseEntity<>(account,HttpStatus.OK);
     }
 
 
     @PostMapping
     public ResponseEntity<AccountDto> createAccount(@RequestBody @Valid AccountDto accountDto){
-        AccountDto createdAccount = accountService.openNewAccount(accountDto);
+        AccountDto createdAccount = accountService.createAccount(accountDto);
         return new ResponseEntity<>(createdAccount,HttpStatus.CREATED);
     }
 
 
-    @PatchMapping("/{id}/deposit")
-    public ResponseEntity<AccountDto> depositToAccountById(@PathVariable Long id, @RequestBody UpdateBalanceDto request) {
-        AccountDto account = accountService.deposit(id, request.amount());
-        return new ResponseEntity<AccountDto>(account, HttpStatus.OK);
-        //return ResponseEntity.ok(account); //this would also work
+    @PatchMapping("/{id}")
+    public ResponseEntity<AccountDto> UpdateBalanceAccountById(@PathVariable Long id, @RequestBody @Valid UpdateBalanceDto request) {
+        if (request.type() == UpdateBalanceType.DEPOSIT){
+            AccountDto account = accountService.deposit(id, request.amount());
+            return new ResponseEntity<AccountDto>(account, HttpStatus.OK);
+            //return ResponseEntity.ok(account); //this would also work
+        }
+        else {
+            AccountDto account = accountService.withdraw(id, request.amount());
+            return new ResponseEntity<AccountDto>(account, HttpStatus.OK);
+            //return ResponseEntity.ok(account); //this would also work
+        }
     }
 
-
-    @PatchMapping("/{id}/withdraw")
-    public ResponseEntity<AccountDto> withdrawFromAccountById(@PathVariable Long id, @RequestBody UpdateBalanceDto request) {
-        AccountDto account = accountService.withdraw(id, request.amount());
-        return new ResponseEntity<AccountDto>(account, HttpStatus.OK);
-        //return ResponseEntity.ok(account); //this would also work
-    }
+//    @PatchMapping("/{id}/withdraw")
+//    public ResponseEntity<AccountDto> withdrawFromAccountById(@PathVariable Long id, @RequestBody UpdateBalanceDto request) {
+//        AccountDto account = accountService.withdraw(id, request.amount());
+//        return new ResponseEntity<AccountDto>(account, HttpStatus.OK);
+//        //return ResponseEntity.ok(account); //this would also work
+//    }
 
 
    @DeleteMapping("/{id}")

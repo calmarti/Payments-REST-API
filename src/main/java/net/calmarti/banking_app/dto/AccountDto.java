@@ -15,10 +15,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 
+import java.math.BigDecimal;
+
 @JsonIgnoreProperties(ignoreUnknown = false)
 public record AccountDto(
         Long id,
         @NotBlank(message = "Account holder name is required")
         String accountHolderName,
         @PositiveOrZero(message = "Balance must be zero or positive")
-        Double balance){};
+        BigDecimal balance){};
