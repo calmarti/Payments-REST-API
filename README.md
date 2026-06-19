@@ -1,5 +1,5 @@
 # Payments-REST-API
-A very simple RESTFul API for banking payments 
+A trivial RESTFul API for banking payments built with Spring Boot
 
 - GET /api/accounts/
 - GET /api/accounts/id
